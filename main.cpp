@@ -17,12 +17,15 @@ short PREV_BUT = -1;
 Text TEXT_WHITE;
 Text TEXT_BLACK;
 Text TEXT_CONG;
+Text TEXT_TRAN;
 Font MAIN_FONT;
 Clock ANIM_CLOCK, FRAME, GAMETIME; // Время для анимации
 
 RenderWindow window(VideoMode(WIDTH, HEIGHT), "Algorithm", Style::Default, ContextSettings(0,0,8));
 RectangleShape CLICK_CURSOR(Vector2f(1, 1)); 
 RectangleShape MOVE_CURSOR(Vector2f(1, 1)); 
+
+Vector2f KSTRETCH = Vector2f(1, 1); // Коэфициент растягивания. Нужно для адаптива хоть какого-нибудь
 
 VertexArray ROUNSQ(TriangleFan, RSVERTEX + 2);
 
@@ -36,26 +39,26 @@ double Radiusxy(Vector2f v1, Vector2f v2);
 //==========================================================================
 //__________________________________________________________________________
 
-class RoundShape : public sf::Shape
+class RoundShape : public sf::Shape // Внимание! последнее запускать update
 {
 public :
 
     explicit RoundShape(const sf::Vector2f& sz = sf::Vector2f(0.f, 0.f)) :
     size(sz)
     {
-        update();
+        //update();
     }
     
     void setPosition(const sf::Vector2f& xy)
     {
         pos = xy;
-        update();
+        //update();
     }
 
     void setRadius(const float radius)
     {
         rad = radius;
-        update();
+        //update();
     }
 	
 	/*void setOutlineThickness(float thickness)	
@@ -82,54 +85,60 @@ public :
 		update();
 	}
 	
+	void upd()
+	{
+		update();
+	}
+	
     virtual std::size_t getPointCount() const
     {
         return RSVERTEX; // fixed, but could be an attribute of the class if needed
     }
 
+
     virtual sf::Vector2f getPoint(std::size_t index) const
     {    	
-        static const float pi = 3.141592654f;
-
-        float angle = index * 2 * pi / getPointCount() - pi / 2;
-        float x = std::cos(angle) * rad;
-        float y = std::sin(angle) * rad;
-				
+    	static const float pi = 3.141592654f;
+	
+	    float angle = index * 2 * pi / getPointCount() - pi / 2;
+	    float x = std::cos(angle) * rad;
+	    float y = std::sin(angle) * rad;
+					
 		if(index < getPointCount()/4)
 		{
-        	x += size.x - rad;
-        	y += rad;
+	       	x += size.x - rad;
+	        y += rad;
 		}
-        else
-        {
-	        if(index < getPointCount()/2)
+	    else
+	    {
+		    if(index < getPointCount()/2)
 			{
 				x += size.x - rad;
-	        	y += size.y - rad;
+		        y += size.y - rad;
 			}	
 			else
 			{
 				if(index >= getPointCount()/2 and index < 0.75 * getPointCount())
 				{
-		        	x += rad;
-        			y += size.y - rad;
+			        x += rad;
+	        		y += size.y - rad;
 				}	
 				else
 				{
 					x += rad;
-        			y += rad;
+	        		y += rad;
 				}
 			}
 		}
-		
-        return sf::Vector2f(pos.x + x, pos.y + y);
+    	
+        return pos + Vector2f(x, y); //sf::Vector2f(pos.x + x, pos.y + y);
     }
 
 private :
-
     sf::Vector2f size;
     sf::Vector2f pos;
     float rad = 10;
+    int numb = 0;
 };
 
 class SdfDisk{
@@ -146,6 +155,7 @@ class SdfDisk{
 		bool started = false; // Стартанула анимация ?
 		bool bond = false;
 		bool flvt = false;
+		float smoot = 0;
 		
 		SdfDisk(const sf::Vector2f& sz = sf::Vector2f(0.f, 0.f), int number = 0) :
 	    size(sz), numb(number)
@@ -388,18 +398,50 @@ Color GetRainbow(int x){
 	}
 }
 
+Color GetCmykRB(int x){
+	x %= 765; //ограничиваем 765 = 3 * 255
+	
+	int layer = x/255; // узнаём какой сектор 
+	
+	x %= 255; // делаем до цветового диапазона
+	
+	switch(layer){
+		case 0:{
+			return Color(255, x, 255 - x);
+		}
+		case 1:{
+			return Color(255 - x, 255, x);
+		}
+		case 2:{
+			return Color(x, 255 - x, 255);
+		}
+	}
+}
+
+/*Color Get_Softly_Red(int x){
+	return Color(255, 200, 200, 60); // Color(211, 160, 185) r = 125.94
+}*/
+
 void Start(){
 	MAIN_FONT.loadFromFile("arkhip.ttf");
 	
 	TEXT_WHITE.setFont(MAIN_FONT);
 	TEXT_WHITE.setCharacterSize(20);
+	TEXT_WHITE.setScale(KSTRETCH);
 	
 	TEXT_BLACK.setFont(MAIN_FONT);
 	TEXT_BLACK.setCharacterSize(20);
 	TEXT_BLACK.setFillColor(Color::Black); 
+	TEXT_BLACK.setScale(KSTRETCH);
 	
 	TEXT_CONG.setFont(MAIN_FONT);
 	TEXT_CONG.setCharacterSize(50);
+	TEXT_CONG.setScale(KSTRETCH);
+	
+	TEXT_TRAN.setFont(MAIN_FONT);
+	TEXT_TRAN.setCharacterSize(27);
+	TEXT_TRAN.setFillColor(Color(255, 255, 255, 128));
+	TEXT_TRAN.setScale(KSTRETCH);
 	
 	SPEED_X = 1.25 * WIDTH/ANIM_TIME; // 1.25 = 5/4
 	T1 = WIDTH/(4 * SPEED_X);
@@ -415,6 +457,8 @@ void Scene0(){
 			ANIM_MODE = 0;
 			GAMETIME.restart();
 			SHIFT_X = 0;
+			
+			return;
 		}
 		else{
 			double dt = FRAME.getElapsedTime().asMicroseconds(), da = ANIM_CLOCK.getElapsedTime().asSeconds();		
@@ -441,7 +485,7 @@ void Scene0(){
 	int wd2 = WIDTH/2, hg2 = HEIGHT/2;
 			
 	TEXT_WHITE.setString(L"Введите число дисков:");
-	TEXT_WHITE.setPosition(wd2 - 110 - SHIFT_X, hg2 - 35);
+	TEXT_WHITE.setPosition(wd2 - TEXT_WHITE.getGlobalBounds().width*2/5 - SHIFT_X, hg2 - TEXT_WHITE.getGlobalBounds().height*2);
 	window.draw(TEXT_WHITE);
 	
 	/*TEXT_WHITE.setString(L"Иди нахуй, пидр");
@@ -463,6 +507,7 @@ void Scene0(){
 		CLICKED_INPUT = false;
 		window_input_0.setFillColor(Color::White);
 	}
+ 	window_input_0.setScale(KSTRETCH);
  	
 	window.draw(window_input_0);	 //Отрисовка прямоугольника
 						
@@ -497,7 +542,7 @@ void RecalcDisks(SdfDisk* disks, int ind)
 		sz /= (ELEM+1);
 	}	
 	y -= sz/2;
-	        
+	
 	// Ахтунг! Часть Володиного код
 								
 	for(int i = 0; i < 3; i++)
@@ -515,6 +560,7 @@ void RecalcDisks(SdfDisk* disks, int ind)
 	
 	    while (!temp_flipped.empty()) {
 	    	disks[temp_flipped.top().size-1].SetSize(Vector2f((temp_flipped.top().size) * WIDTH/(4 * ELEM) + 20, sz));
+	    	disks[temp_flipped.top().size-1].smoot = sz/2 - 2;
 	    	if(ind == -1 or ind == (temp_flipped.top().size-1))
 	        	disks[temp_flipped.top().size-1].SetVectTo(Vector2f(x, y) - disks[temp_flipped.top().size-1].size * 0.5f);
 	        y -= sz;
@@ -543,9 +589,10 @@ void MoveDisks(SdfDisk* disks)
 		{
 			tm = disks[i].GetPosition() - disks[i].VectTo;
 			ang = atan2(tm.x, tm.y);
-			tm = Vector2f(1500 * sin(ang), 1500 * cos(ang));
+			tm = Vector2f(1000 * sin(ang), 1000 * cos(ang));
 			disks[i].pos -= tm * FRAME.getElapsedTime().asSeconds();
-			if(Radiusxy(disks[i].GetPosition(), disks[i].VectTo) < 0.5)
+			
+			if(Radiusxy(disks[i].GetPosition(), disks[i].VectTo) < 10) // тут раньше был код на проверку, теперь она в другом месте33 disks[i].size.y/2
 			{
 				disks[i].pos = disks[i].VectTo;
 				disks[i].flvt = false;
@@ -633,22 +680,28 @@ void CheckArea(SdfDisk* disks)
 void Scene1(double shfx){
 	RoundShape post_rect(Vector2f(WIDTH - 50, 50));  		
 	
- 	post_rect.setOutlineThickness(3);
+ 	post_rect.setOutlineThickness(1);
  	post_rect.setOutlineColor(Color(130, 145, 229, 100));
  
 	post_rect.setFillColor(Color(130, 145, 229));
  	
  	post_rect.setPosition(Vector2f(25 + shfx, HEIGHT - 75));  
+ 	
+ 	post_rect.upd();
 	window.draw(post_rect);
 	
 	
 	post_rect.setSize(Vector2f(WIDTH/50, 3*HEIGHT/4));		
 	post_rect.setRadius(15);
  	post_rect.setPosition(Vector2f(WIDTH/4 + shfx, HEIGHT/4 - 60));   // HEIGHT - 75 - 3*HEIGHT/4 + 15
+ 	
+ 	post_rect.upd();
 	window.draw(post_rect);	 //Отрисовка прямоугольника
 	
 	for(short i=0;i<2;i++){
 		post_rect.move(WIDTH/4, 0);  
+		
+		post_rect.upd();
 		window.draw(post_rect);	
 	}
 	
@@ -696,9 +749,10 @@ void Scene1(double shfx){
 void SceneDsk(SdfDisk* disks)
 {
 	RoundShape dsk(Vector2f(WIDTH/4, 50));
-	dsk.setOutlineThickness(2);
+	dsk.setSize(Vector2f(WIDTH/4, 50));
+	dsk.setOutlineThickness(1);
 	
-	dsk.setRadius(10);
+	//dsk.setRadius(10);
 	
 	TEXT_WHITE.setString(to_string(disks[0].numb));
 	Vector2f tm = Vector2f(TEXT_WHITE.getGlobalBounds().height, TEXT_WHITE.getGlobalBounds().width);
@@ -714,7 +768,10 @@ void SceneDsk(SdfDisk* disks)
 		dsk.setOutlineColor(Color(disks[i].col.r, disks[i].col.g, disks[i].col.b, 100));
 	   	dsk.setSize(disks[i].size);
 	    dsk.setPosition(disks[i].pos);
+	    dsk.setRadius(disks[i].smoot);
+	    dsk.upd();
 	    window.draw(dsk);
+	
 	    
 	    TEXT_WHITE.setString(to_string(disks[i].numb));
 	    tm = Vector2f(TEXT_WHITE.getGlobalBounds().height/2, TEXT_WHITE.getGlobalBounds().width/2);
@@ -744,13 +801,15 @@ void SetStartDisks(SdfDisk* disks)
 	for(int i = ELEM-1; i >= 0; i--)
 	{
 	    if(ELEM < 8){
-		    disks[i].col = GetRainbow(i * 765 / ELEM); 
+		    //disks[i].col = GetRainbow(i * 255 / ELEM); 
+		    disks[i].col = GetCmykRB(i * 512 / ELEM);
 		    disks[i].SetSize(Vector2f((i + 1.f) * WIDTH/(4 * ELEM) + 20, sz));
 			disks[i].SetPosition(Vector2f(WIDTH/4 + WIDTH/100, y-HEIGHT-20*(ELEM - i)));
 			y -= sz;
 		}
 		else{
-			disks[i].col = GetRainbow(i * 1530 / ELEM);
+			//disks[i].col = GetRainbow(i * 1539 / ELEM);
+			disks[i].col = GetCmykRB(i * 765 / ELEM);
 			disks[i].SetSize(Vector2f((i + 1.f) * WIDTH/(4 * ELEM) + 20, sz));
 			disks[i].SetPosition(Vector2f(WIDTH/4 + WIDTH/100, y-HEIGHT-20*(ELEM - i)));
 			y -= sz + 1;
@@ -775,10 +834,13 @@ void Congration(SdfDisk* disks)
 	}
 	
 	TEXT_CONG.setString(L"Хорош, но давай теперь\nпопробуй решить с " + to_string(ELEM + 1) + L" дисками(ом)\nТвоё количество ходов: " + to_string(gameplay.GetNumMoves()) );
-
 	TEXT_CONG.setPosition(Vector2f(WIDTH/2 - TEXT_CONG.getGlobalBounds().width/2, HEIGHT/2 - TEXT_CONG.getGlobalBounds().height/2));
 	
 	window.draw(TEXT_CONG);
+	
+	TEXT_TRAN.setString(L"Нажмите Esc для выхода в меню");
+	TEXT_TRAN.setPosition(Vector2f(WIDTH - TEXT_TRAN.getGlobalBounds().width-43, HEIGHT - TEXT_TRAN.getGlobalBounds().height-40));
+	window.draw(TEXT_TRAN);
 }
 
 int main()
@@ -797,9 +859,10 @@ int main()
 	
 	SdfDisk disks[100];
 	
-	CircleShape shape(10);
-	shape.setFillColor(Color(230, 0, 230)); 
+	//CircleShape shape(10);
+	//shape.setFillColor(Color(230, 0, 230)); 
 	
+	//window.setFramerateLimit(120);
 
     while(window.isOpen()) // .isOpen() - Пока открыто окно;
     {
@@ -817,11 +880,11 @@ int main()
 	                   Vector2f(WIDTH, HEIGHT)
 	                )
 	            );
+	            KSTRETCH = Vector2f(WIDTH/1500.f, HEIGHT/800.f);
+	            
 	            ANIM_MODE = 0;
 	            
-	            SPEED_X = 1.25 * WIDTH/ANIM_TIME; // 1.25 = 5/4
-				T1 = WIDTH/(4 * SPEED_X);
-				AX = SPEED_X / T1;
+	            Start();
 				
 				RecalcDisks(disks, -1);
 	        }
@@ -910,21 +973,33 @@ int main()
 					else
 					if(a != -1 and PREV_BUT != -1)
 					{
-						cout<<gameplay.towers[0].top().size - 1<<"\n";
 					    if(!gameplay.towers[PREV_BUT].is_empty())
-							RecalcDisks(disks, gameplay.towers[PREV_BUT].top().size - 1); // CH_DSK = gameplay.towers[0].top().size - 1;
-					    gameplay.move(PREV_BUT, a);
-					    PREV_BUT = -1;
+					    {
+					    	//cout<<PREV_BUT<<" "<<gameplay.towers[PREV_BUT].top().size<<"\n";
+							//RecalcDisks(disks, gameplay.towers[PREV_BUT].top().size - 1); // CH_DSK = gameplay.towers[0].top().size - 1;
+					    	short b = gameplay.towers[PREV_BUT].top().size - 1;
+							cout<<"ok0\n";
+							gameplay.move(PREV_BUT, a);
+					    	cout<<"ok1\n";
+					    	RecalcDisks(disks, b);
+					    	cout<<"ok2\n";
+						}
+						PREV_BUT = -1;
 					}
 				}
 			}
-			if(event.type == Event::KeyPressed and event.key.code == 58 and SCENE == 1)
+			if(event.type == Event::KeyPressed and event.key.code == 58 and SCENE == 1) // enter
 				RecalcDisks(disks, -1);
 			
 		}
         
-		window.clear(Color(211,160, 185)); 
+		//window.clear(GetCmykRB(GAMETIME.getElapsedTime().asSeconds()*40)); //Color(211,160, 185)
+		//window.clear(Color(211,160, 185));
 		
+		RectangleShape fn(Vector2f(WIDTH, HEIGHT));
+		fn.setFillColor(Color(211,160, 185, 255)); // 96
+		
+		window.draw(fn);
 		//Disk_draw(Vector2f(100, 100), Vector2f(100, 50), 10, Color::Red);
 
         switch(SCENE)
@@ -934,7 +1009,8 @@ int main()
 				break;
 			}
         	case 1:{
-        		CheckArea(disks);
+        		if(!gameplay.is_finished())
+        			CheckArea(disks);
         		MoveDisks(disks);
         		
         		Scene1(0);
